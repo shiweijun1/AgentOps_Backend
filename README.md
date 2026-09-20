@@ -329,6 +329,21 @@ V7 增加人工编辑/拒绝快照列、引用租户列及权限，不修改 V1�
 
 V1 已提供请求 ID 唯一键、建议来源字段与首次响应字段；V8 仅补充 `source_suggestion_id` 唯一键及权限，不修改 V1～V7。消息、建议的 `sourceMessageId` 和首次响应时间在同一个数据库事务提交，按工单行锁串行化并发写入。完整操作顺序见 [HTTP Client 演示](docs/agentops-api.http)。
 
+## 运营指标 API
+
+`GET /api/v1/analytics/overview?from=2026-03-01T00:00:00Z&to=2026-03-02T00:00:00Z` 仅限 `ADMIN` 角色。请求必须使用带时区的 ISO-8601 时间（`Z` 或显式偏移）；服务端统一换算成 UTC，区间为 `[from, to)`，最长 90 天。响应 `from`、`to` 均为 UTC。所有查询按当前 JWT 身份的 `tenantId` 过滤，仅返回聚合计数与比率，不返回工单正文或个人信息。
+
+| 指标 | 分子 / 分母 | 时间字段及规则 |
+|---|---|---|
+| 创建数及当前状态分布 | 创建数为工单总数；六种状态分别计数 | `ticket.created_at` 在区间内，状态取查询时的当前值 |
+| 平均首次响应时长 | 这些工单中 `first_response_at - submitted_at` 的时长总和 / 有有效首次响应的工单数 | 工单按 `created_at` 入组；仅统计两个时间均存在且首次响应不早于提交的记录，单位毫秒 |
+| 当前解决率 | 这批工单当前为 `RESOLVED` 或 `CLOSED` 的数量 / 这批创建的工单数 | 工单按 `created_at` 入组，不能用“本期解决数 / 本期创建数”替代 |
+| Agent Run 成功率 | `SUCCEEDED` 数 / `SUCCEEDED` + `FAILED` 数 | `agent_run.finished_at` 在区间内；所有 Run 类型，未结束者不计入 |
+| AI 建议采纳率 | 这批建议当前为 `ADOPTED` 的数量 / 这批生成的建议数 | `ai_suggestion.created_at` 在区间内；采纳可发生在查询区间之后 |
+| 已采纳建议发送率 | 这批已采纳建议中关联实际公开 `AI_SUGGESTION` 工单消息的数量 / 这批已采纳建议数 | 建议按 `created_at` 入组；发送可发生在查询区间之后 |
+
+比率为 0～1 的小数（四位精度），分母为零时返回 `0`；平均首次响应时长无样本时返回 `null`。状态分布始终包含六个状态，空状态计 `0`。这是按创建批次观察的当前结果，历史区间重查可能因后续状态变化而变化。聚合在数据库端完成，使用只读事务；当前规模沿用 V1～V8 索引，没有新增迁移。管理员登录后的完整调用见 [HTTP Client 演示](docs/agentops-api.http)。
+
 ## 数据库设计
 
 数据库说明见 `docs/database-design.md`，基线 DDL 见 `src/main/resources/db/migration/V1__baseline_schema.sql`；V2～V8 依次覆盖开发身份、工单、Outbox、Agent 分析、知识检索、回复建议及人工会话。Hibernate 保持 `ddl-auto: validate`，所有数据库变更必须通过新的 Flyway 迁移完成。

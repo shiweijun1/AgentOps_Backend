@@ -231,3 +231,7 @@ Authorization: Bearer {{supportToken}}
 ### 29. 撤回知识文章；再次检索不再命中，未采纳的建议也不能再采纳
 POST {{baseUrl}}/api/v1/knowledge/articles/{{knowledgeArticleId}}/withdraw
 Authorization: Bearer {{adminToken}}
+
+### 30. 运营指标（仅 ADMIN；UTC 半开区间，最长 90 天）
+GET {{baseUrl}}/api/v1/analytics/overview?from=2026-03-01T00:00:00Z&to=2026-03-02T00:00:00Z
+Authorization: Bearer {{adminToken}}
