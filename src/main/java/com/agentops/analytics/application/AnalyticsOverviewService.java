@@ -61,7 +61,7 @@ public class AnalyticsOverviewService {
     }
 
     private static BigDecimal rate(long numerator, long denominator) {
-        return denominator == 0 ? BigDecimal.ZERO.setScale(4)
+        return denominator == 0 ? BigDecimal.valueOf(0, 4)
                 : BigDecimal.valueOf(numerator).divide(BigDecimal.valueOf(denominator), 4, RoundingMode.HALF_UP);
     }
 }
