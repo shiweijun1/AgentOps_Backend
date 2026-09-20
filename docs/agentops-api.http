@@ -3,6 +3,8 @@
 @supportUserId = 00000000-0000-0000-0000-000000000303
 @supportTeamId = 00000000-0000-0000-0000-000000000401
 
+### 知识库演示使用下面第 4 步获取的 adminToken
+
 ### 1. 客户登录
 POST {{baseUrl}}/api/v1/auth/login
 Content-Type: {{json}}
@@ -86,4 +88,46 @@ Authorization: Bearer {{adminToken}}
 
 ### 9. 查询状态流转历史
 GET {{baseUrl}}/api/v1/tickets/{{ticketId}}/transitions
+Authorization: Bearer {{adminToken}}
+
+### 10. 创建知识文章
+POST {{baseUrl}}/api/v1/knowledge/articles
+Authorization: Bearer {{adminToken}}
+Content-Type: {{json}}
+
+{
+  "title": "企业账号登录排障指南"
+}
+
+> {% client.global.set("knowledgeArticleId", response.body.data.id); %}
+
+### 11. 创建内容草稿版本
+POST {{baseUrl}}/api/v1/knowledge/articles/{{knowledgeArticleId}}/versions
+Authorization: Bearer {{adminToken}}
+Content-Type: {{json}}
+
+{
+  "content": "企业账号登录失败时，请先检查账号是否被锁定，再确认双重认证设备时间正确。若无法自行恢复，请联系管理员。"
+}
+
+> {% client.global.set("knowledgeVersionId", response.body.data.id); %}
+
+### 12. 审核发布并自动分块
+POST {{baseUrl}}/api/v1/knowledge/articles/{{knowledgeArticleId}}/versions/{{knowledgeVersionId}}/publish
+Authorization: Bearer {{adminToken}}
+
+### 13. 中文关键词检索当前发布版本
+GET {{baseUrl}}/api/v1/knowledge/search?q=登录&limit=10
+Authorization: Bearer {{adminToken}}
+
+### 14. 查看文章和版本
+GET {{baseUrl}}/api/v1/knowledge/articles/{{knowledgeArticleId}}
+Authorization: Bearer {{adminToken}}
+
+### 15. 查看版本列表
+GET {{baseUrl}}/api/v1/knowledge/articles/{{knowledgeArticleId}}/versions
+Authorization: Bearer {{adminToken}}
+
+### 16. 撤回；再次检索将不再命中此文章
+POST {{baseUrl}}/api/v1/knowledge/articles/{{knowledgeArticleId}}/withdraw
 Authorization: Bearer {{adminToken}}

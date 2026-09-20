@@ -1,6 +1,6 @@
 # AgentOps Backend
 
-AgentOps 是一个企业智能工单处理平台。本仓库当前提供 Java 21、Spring Boot 3 的模块化单体后端，以及身份认证、RBAC、工单领域、Transactional Outbox 和工单智能分析 Agent 最小闭环。知识库、RAG 和自动回复尚未实现。
+AgentOps 是一个企业智能工单处理平台。本仓库当前提供 Java 21、Spring Boot 3 的模块化单体后端，以及身份认证、RBAC、工单领域、Transactional Outbox、工单智能分析 Agent 和知识库文本检索最小闭环。RAG 和自动回复尚未实现。
 
 ## 技术栈
 
@@ -276,6 +276,28 @@ Invoke-RestMethod -Uri "http://localhost:8080/api/v1/tickets/$ticketId/analysis"
 
 事件发布和 Worker 执行是异步的；若首次查询仍为 `PENDING`，稍等后再次查询。手动重新分析可执行 `Invoke-RestMethod -Method Post -Uri "http://localhost:8080/api/v1/tickets/$ticketId/agent-runs" -Headers $headers`。步骤 API 使用运行列表返回的 `id`。
 
+## 知识库文本检索
+
+本阶段只管理手工录入的文本。持有 `knowledge:manage` 的管理员创建文章与草稿版本，并以发布命令完成审核发布；SUPPORT 仅有 `knowledge:search` 权限。权限只控制接口，所有知识库读写和检索还会使用当前登录用户的 `tenantId` 做数据隔离。
+
+| 方法 | 地址 | 权限 |
+|---|---|---|
+| `POST` | `/api/v1/knowledge/articles` | `knowledge:manage` |
+| `POST` | `/api/v1/knowledge/articles/{id}/versions` | `knowledge:manage` |
+| `POST` | `/api/v1/knowledge/articles/{id}/versions/{versionId}/publish` | `knowledge:manage` |
+| `POST` | `/api/v1/knowledge/articles/{id}/withdraw` | `knowledge:manage` |
+| `GET` | `/api/v1/knowledge/articles/{id}` | `knowledge:manage` |
+| `GET` | `/api/v1/knowledge/articles/{id}/versions` | `knowledge:manage` |
+| `GET` | `/api/v1/knowledge/search?q=登录&limit=10` | `knowledge:search` |
+
+文章状态为 `DRAFT → PUBLISHED → WITHDRAWN`，撤回后不能直接恢复。版本状态为 `DRAFT → PUBLISHED → SUPERSEDED`；已发布版本不可原地修改，新内容必须新建版本。发布当前版本为幂等操作，不会重复生成片段。发布新版本时，旧版本转为 `SUPERSEDED`，检索只返回当前版本、已发布且未撤回、处于 `validFrom` / `validUntil` 有效期内的片段。`validUntil` 为排他上界。
+
+分块固定为 500 个 Unicode 码点，片段间重叠 50 个码点，`chunkIndex` 从 0 开始；单篇上限 20,000 码点，最多 50 片，绝不在代理对（如 emoji）中间截断。`tokenCount` **只是估算值**：每个中日韩码点计 1，其他码点每 4 个计 1 并向上取整；`tokenCountEstimated=true`，不用于模型计费。发布、分块、旧版状态及当前版本切换位于同一 MySQL 事务中。
+
+V6 为 `knowledge_chunk.content` 建立 MySQL `ngram` FULLTEXT 索引；默认 MySQL `ngram_token_size=2`，因此中文查询建议至少两个字。搜索使用绑定参数的 `MATCH ... AGAINST`，按 MySQL 相关性分数排序，不拼接用户输入。返回 `articleId`、`versionId`、`chunkId`、标题、片段和分数。此分数仅供文本检索排序，不是语义相似度。
+
+完整可执行示例见 [HTTP Client 演示](docs/agentops-api.http)。本阶段不含 PDF 上传、Embedding、RAG 回复或自动发消息。
+
 ## 数据库设计
 
-数据库说明见 `docs/database-design.md`，基线 DDL 见 `src/main/resources/db/migration/V1__baseline_schema.sql`，开发身份数据见 V2，工单权限与演示数据见 V3，Outbox 发布租约见 V4，Agent 分析字段、抢占索引与权限见 `V5__agent_analysis.sql`。Hibernate 保持 `ddl-auto: validate`，所有数据库变更必须通过新的 Flyway 迁移完成。
+数据库说明见 `docs/database-design.md`，基线 DDL 见 `src/main/resources/db/migration/V1__baseline_schema.sql`，开发身份数据见 V2，工单权限与演示数据见 V3，Outbox 发布租约见 V4，Agent 分析字段、抢占索引与权限见 V5，知识库 ngram 索引及权限见 `V6__knowledge_text_search.sql`。Hibernate 保持 `ddl-auto: validate`，所有数据库变更必须通过新的 Flyway 迁移完成。

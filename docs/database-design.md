@@ -104,6 +104,15 @@
 - `agent_step.input_snapshot`、`output_snapshot` 仅存摘要；`ai_analysis_result.category_code` 保存模型分类枚举，`suggested_category_id` 保持空值，待正式分类映射功能实现。
 - `ai_analysis_result` 只保存成功 Run 的结果；HIGH 风险或低置信度会强制 `manual_required=true`。查询当前分析返回最近一次成功结果，而不是失败重跑结果。
 
+## 知识库文本检索（V6）
+
+`V6__knowledge_text_search.sql` 为 `knowledge_chunk.content` 增加 `WITH PARSER ngram` 的 FULLTEXT 索引，并增加 `token_count_estimated` 标记；同时注册 `knowledge:manage`、`knowledge:search` 权限。开发 ADMIN 同时拥有管理和检索权限，SUPPORT 仅可检索。V1～V5 不作修改。
+
+- 文章 `DRAFT → PUBLISHED → WITHDRAWN`；版本 `DRAFT → PUBLISHED → SUPERSEDED`。文章 `current_version_id` 指向唯一当前发布版本；已发布版本内容不原地修改。
+- 发布时以 `SELECT ... FOR UPDATE` 锁定文章，生成 `knowledge_chunk`、将旧版本标记为 SUPERSEDED、发布目标版本并切换 `current_version_id`，全部在同一事务。重复发布当前版本直接返回，不增加分块。
+- 全文搜索同时限定 article/version/chunk 的 `tenant_id`、文章与版本状态、`current_version_id`、`valid_from` 和排他的 `valid_until`；仅使用绑定参数，不拼接用户查询。
+- 按 Unicode 码点固定分块：窗口 500、重叠 50，最大 20,000 码点和 50 片。`chunk_index` 从 0 开始。`token_count` 是启发式估算：中日韩码点每个计 1，其他码点每 4 个计 1 并向上取整；不能视为模型真实 Token 用量。
+
 可靠性边界：
 
 - 工单与 PENDING Outbox 在同一 MySQL 事务提交。
