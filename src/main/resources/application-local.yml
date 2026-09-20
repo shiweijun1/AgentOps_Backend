@@ -1,0 +1,13 @@
+spring:
+  config:
+    import: optional:file:.env[.properties]
+  jpa:
+    show-sql: false
+  flyway:
+    placeholders:
+      dev_seed_enabled: ${DEV_SEED_ENABLED:true}
+
+logging:
+  level:
+    com.agentops: DEBUG
+    org.hibernate.SQL: INFO

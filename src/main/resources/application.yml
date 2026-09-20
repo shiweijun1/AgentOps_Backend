@@ -1,0 +1,121 @@
+spring:
+  application:
+    name: agentops-backend
+  profiles:
+    default: local
+  jackson:
+    default-property-inclusion: non_null
+    time-zone: UTC
+  datasource:
+    url: ${DB_URL:jdbc:mysql://localhost:3307/agentops?useUnicode=true&characterEncoding=utf8&serverTimezone=UTC}
+    username: ${DB_USERNAME:agentops}
+    password: ${DB_PASSWORD:agentops_dev_password}
+    hikari:
+      maximum-pool-size: ${DB_POOL_MAX_SIZE:20}
+      minimum-idle: ${DB_POOL_MIN_IDLE:5}
+      connection-timeout: 3000
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+        format_sql: false
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    validate-migration-naming: true
+    placeholders:
+      dev_seed_enabled: ${DEV_SEED_ENABLED:false}
+      dev_admin_password_hash: ${DEV_ADMIN_PASSWORD_HASH:$2a$12$4RjCpvCT7V6ZKG/cEWsbq.UB.s/hHLNDypgrN3CjCd1sQ.yZl1o2S}
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 2s
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:agentops}
+    password: ${RABBITMQ_PASSWORD:agentops_dev_password}
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    template:
+      mandatory: true
+    listener:
+      simple:
+        acknowledge-mode: manual
+        prefetch: 10
+        default-requeue-rejected: false
+
+server:
+  port: ${SERVER_PORT:8080}
+  shutdown: graceful
+
+agentops:
+  identity:
+    default-tenant-id: ${DEFAULT_TENANT_ID:default}
+  security:
+    jwt:
+      issuer: ${JWT_ISSUER:agentops}
+      secret: ${JWT_SECRET:replace-with-at-least-32-random-bytes-before-production}
+      access-token-ttl: ${JWT_ACCESS_TTL:15m}
+      refresh-token-ttl: ${JWT_REFRESH_TTL:7d}
+  messaging:
+    enabled: ${MESSAGING_ENABLED:true}
+    exchange: ${RABBITMQ_EXCHANGE:agentops.events}
+    ticket-created-queue: ${RABBITMQ_TICKET_CREATED_QUEUE:agentops.ticket-created}
+    ticket-created-routing-key: ${RABBITMQ_TICKET_CREATED_ROUTING_KEY:ticket.created.v1}
+    dead-letter-exchange: ${RABBITMQ_DLX:agentops.dlx}
+    dead-letter-queue: ${RABBITMQ_TICKET_CREATED_DLQ:agentops.ticket-created.dlq}
+    dead-letter-routing-key: ${RABBITMQ_TICKET_CREATED_DLQ_ROUTING_KEY:ticket.created.dead}
+    consumer-name: ${TICKET_CREATED_CONSUMER_NAME:ticket-created-consumer-v1}
+    outbox:
+      scheduling-enabled: ${OUTBOX_SCHEDULING_ENABLED:true}
+      batch-size: ${OUTBOX_BATCH_SIZE:20}
+      max-retries: ${OUTBOX_MAX_RETRIES:5}
+      publish-interval: ${OUTBOX_PUBLISH_INTERVAL:1s}
+      lease-duration: ${OUTBOX_LEASE_DURATION:30s}
+      confirm-timeout: ${OUTBOX_CONFIRM_TIMEOUT:5s}
+      retry-base-delay: ${OUTBOX_RETRY_BASE_DELAY:5s}
+      retry-max-delay: ${OUTBOX_RETRY_MAX_DELAY:5m}
+    consumer:
+      max-retries: ${INBOX_MAX_RETRIES:3}
+  ai:
+    provider: ${AI_PROVIDER:fake}
+    base-url: ${AI_BASE_URL:}
+    api-key: ${AI_API_KEY:}
+    model: ${AI_MODEL:}
+    request-timeout: ${AI_REQUEST_TIMEOUT:30s}
+  agent:
+    worker-enabled: ${AGENT_WORKER_ENABLED:true}
+    batch-size: ${AGENT_BATCH_SIZE:10}
+    poll-interval: ${AGENT_POLL_INTERVAL:2s}
+    lease-duration: ${AGENT_LEASE_DURATION:2m}
+    model-timeout: ${AGENT_MODEL_TIMEOUT:30s}
+    low-confidence-threshold: ${AGENT_LOW_CONFIDENCE_THRESHOLD:0.7}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: when_authorized
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+
+logging:
+  pattern:
+    level: "%5p [${spring.application.name:agentops},%X{traceId:-}]"

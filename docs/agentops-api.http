@@ -1,0 +1,89 @@
+@baseUrl = http://localhost:8080
+@json = application/json
+@supportUserId = 00000000-0000-0000-0000-000000000303
+@supportTeamId = 00000000-0000-0000-0000-000000000401
+
+### 1. 客户登录
+POST {{baseUrl}}/api/v1/auth/login
+Content-Type: {{json}}
+
+{
+  "tenantId": "default",
+  "username": "customer",
+  "password": "Admin@123456"
+}
+
+> {% client.global.set("customerToken", response.body.data.accessToken); %}
+
+### 2. 创建工单；重复执行会返回同一个 ticketId
+POST {{baseUrl}}/api/v1/tickets
+Authorization: Bearer {{customerToken}}
+Idempotency-Key: demo-create-ticket-001
+Content-Type: {{json}}
+
+{
+  "title": "VPN 无法连接",
+  "description": "客户端提示认证失败，请协助处理。",
+  "priority": "HIGH"
+}
+
+> {%
+    client.global.set("ticketId", response.body.data.id);
+    client.global.set("ticketVersion", response.body.data.version);
+%}
+
+### 3. 分页并按状态查询本人工单
+GET {{baseUrl}}/api/v1/tickets?status=NEW&page=0&size=20
+Authorization: Bearer {{customerToken}}
+
+### 4. 管理员登录
+POST {{baseUrl}}/api/v1/auth/login
+Content-Type: {{json}}
+
+{
+  "tenantId": "default",
+  "username": "admin",
+  "password": "Admin@123456"
+}
+
+> {% client.global.set("adminToken", response.body.data.accessToken); %}
+
+### 5. 分派到默认客服组及客服
+POST {{baseUrl}}/api/v1/tickets/{{ticketId}}/assignments
+Authorization: Bearer {{adminToken}}
+Content-Type: {{json}}
+
+{
+  "teamId": "{{supportTeamId}}",
+  "assigneeId": "{{supportUserId}}",
+  "reason": "分派给默认客服组",
+  "expectedVersion": {{ticketVersion}}
+}
+
+> {% client.global.set("ticketVersion", response.body.data.version); %}
+
+### 6. NEW -> PENDING
+POST {{baseUrl}}/api/v1/tickets/{{ticketId}}/transitions
+Authorization: Bearer {{adminToken}}
+Content-Type: {{json}}
+
+{
+  "toStatus": "PENDING",
+  "reason": "已进入客服队列",
+  "commandId": "demo-transition-pending-001",
+  "expectedVersion": {{ticketVersion}}
+}
+
+> {% client.global.set("ticketVersion", response.body.data.version); %}
+
+### 7. 查询详情
+GET {{baseUrl}}/api/v1/tickets/{{ticketId}}
+Authorization: Bearer {{adminToken}}
+
+### 8. 查询分派历史
+GET {{baseUrl}}/api/v1/tickets/{{ticketId}}/assignments
+Authorization: Bearer {{adminToken}}
+
+### 9. 查询状态流转历史
+GET {{baseUrl}}/api/v1/tickets/{{ticketId}}/transitions
+Authorization: Bearer {{adminToken}}
