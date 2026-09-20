@@ -23,10 +23,12 @@ public interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
 
     @Query(value = """
             SELECT * FROM agent_run
-             WHERE status = 'PENDING' OR (status = 'RUNNING' AND lease_until <= :now)
+             WHERE run_type = :runType
+               AND (status = 'PENDING' OR (status = 'RUNNING' AND lease_until <= :now))
              ORDER BY created_at LIMIT :batchSize FOR UPDATE SKIP LOCKED
             """, nativeQuery = true)
-    List<AgentRun> lockClaimable(@Param("now") Instant now, @Param("batchSize") int batchSize);
+    List<AgentRun> lockClaimable(@Param("now") Instant now, @Param("batchSize") int batchSize,
+                                 @Param("runType") String runType);
 
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query(value = """

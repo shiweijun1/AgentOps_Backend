@@ -1,6 +1,6 @@
 # AgentOps Backend
 
-AgentOps 是一个企业智能工单处理平台。本仓库当前提供 Java 21、Spring Boot 3 的模块化单体后端，以及身份认证、RBAC、工单领域、Transactional Outbox、工单智能分析 Agent 和知识库文本检索最小闭环。RAG 和自动回复尚未实现。
+AgentOps 是一个企业智能工单处理平台。本仓库提供 Java 21、Spring Boot 3 的模块化单体后端，以及身份认证、RBAC、工单领域、Transactional Outbox、工单智能分析 Agent、知识库文本检索和带引用的 AI 回复建议最小闭环。建议仅供客服人工审核，不自动发送客户消息。
 
 ## 技术栈
 
@@ -296,8 +296,24 @@ Invoke-RestMethod -Uri "http://localhost:8080/api/v1/tickets/$ticketId/analysis"
 
 V6 为 `knowledge_chunk.content` 建立 MySQL `ngram` FULLTEXT 索引；默认 MySQL `ngram_token_size=2`，因此中文查询建议至少两个字。搜索使用绑定参数的 `MATCH ... AGAINST`，按 MySQL 相关性分数排序，不拼接用户输入。返回 `articleId`、`versionId`、`chunkId`、标题、片段和分数。此分数仅供文本检索排序，不是语义相似度。
 
-完整可执行示例见 [HTTP Client 演示](docs/agentops-api.http)。本阶段不含 PDF 上传、Embedding、RAG 回复或自动发消息。
+完整可执行示例见 [HTTP Client 演示](docs/agentops-api.http)。本阶段不含 PDF 上传或 Embedding。
+
+## 带知识引用的 AI 回复建议（V7）
+
+分析 Run 成功后在同一事务中幂等创建 `REPLY_SUGGESTION` Run。独立 Worker 租约抢占后，先检查分析风险与置信度，使用租户限定的当前有效知识全文检索，再在数据库事务外调用回复模型。模型只能引用实际检索到的片段，JSON 必须包含正文、`citationChunkIds` 和 0–1 置信度；正文中每个引用使用 `[citation:chunkId]`。无命中、高风险、低置信度、模型超时或不可验证输出均使回复 Run 进入 FAILED，留给人工处理，不产生建议。
+
+成功时，短事务重新锁定并校验片段仍为当前、已发布、未撤回且在有效期内；`ai_suggestion`、`knowledge_citation`、步骤和 Run 成功状态一起提交。所有检索候选片段都记录快照，`usedInAnswer` 指明真正引用的片段。新建议会将同一工单旧的未审核建议标为 `SUPERSEDED`。客服可查看、编辑、采纳或拒绝：`READY → EDITED → ADOPTED/REJECTED`，也可直接 `READY → ADOPTED/REJECTED`。人工修改保留 `originalContent`，采纳时另存 `finalContentSnapshot`；编辑必须保留已验证引用且不能加入虚构引用。审核命令带 `expectedVersion`，冲突返回 409。采纳时再次校验知识有效性及工单内容版本。采纳只记录结果，**不会创建客户消息或自动发送**。
+
+| 方法 | 地址 | 权限 |
+|---|---|---|
+| `GET` | `/api/v1/tickets/{ticketId}/suggestions` | `suggestion:read` + 工单可见范围 + 客服/管理员 |
+| `GET` | `/api/v1/suggestions/{id}` | 同上 |
+| `PATCH` | `/api/v1/suggestions/{id}` | `suggestion:review`，正文与 `expectedVersion` |
+| `POST` | `/api/v1/suggestions/{id}/adopt` | `suggestion:review`，`expectedVersion` |
+| `POST` | `/api/v1/suggestions/{id}/reject` | `suggestion:review`，原因与 `expectedVersion` |
+
+V7 增加人工编辑/拒绝快照列、引用租户列及权限，不修改 V1～V6。默认 fake 模型可本地演示；HTTP 模型沿用 `AI_PROVIDER=http` 与现有模型配置。MySQL ngram 分数是关键词相关性，不是事实正确性证明；客服采纳前仍需人工核实内容。演示流程见 [HTTP Client 示例](docs/agentops-api.http)。
 
 ## 数据库设计
 
-数据库说明见 `docs/database-design.md`，基线 DDL 见 `src/main/resources/db/migration/V1__baseline_schema.sql`，开发身份数据见 V2，工单权限与演示数据见 V3，Outbox 发布租约见 V4，Agent 分析字段、抢占索引与权限见 V5，知识库 ngram 索引及权限见 `V6__knowledge_text_search.sql`。Hibernate 保持 `ddl-auto: validate`，所有数据库变更必须通过新的 Flyway 迁移完成。
+数据库说明见 `docs/database-design.md`，基线 DDL 见 `src/main/resources/db/migration/V1__baseline_schema.sql`；V2～V7 依次覆盖开发身份、工单、Outbox、Agent 分析、知识检索及回复建议。Hibernate 保持 `ddl-auto: validate`，所有数据库变更必须通过新的 Flyway 迁移完成。

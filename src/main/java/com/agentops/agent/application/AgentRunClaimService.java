@@ -1,6 +1,7 @@
 package com.agentops.agent.application;
 
 import com.agentops.agent.config.AgentProperties;
+import com.agentops.agent.domain.AgentRunType;
 import com.agentops.agent.infrastructure.persistence.AgentRunRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,17 +23,22 @@ public class AgentRunClaimService {
 
     @Transactional
     public List<Claim> claim() {
-        return claim(properties.getBatchSize());
+        return claim(properties.getBatchSize(), AgentRunType.TICKET_ANALYSIS);
     }
 
     @Transactional
     public Optional<Claim> claimOne() {
-        return claim(1).stream().findFirst();
+        return claim(1, AgentRunType.TICKET_ANALYSIS).stream().findFirst();
     }
 
-    private List<Claim> claim(int batchSize) {
+    @Transactional
+    public Optional<Claim> claimOne(AgentRunType runType) {
+        return claim(1, runType).stream().findFirst();
+    }
+
+    private List<Claim> claim(int batchSize, AgentRunType runType) {
         Instant now = clock.instant();
-        return runs.lockClaimable(now, batchSize).stream().map(run -> {
+        return runs.lockClaimable(now, batchSize, runType.name()).stream().map(run -> {
             String owner = UUID.randomUUID().toString();
             int changed = runs.claim(run.getId(), owner, now, now.plus(properties.getLeaseDuration()));
             if (changed != 1) throw new IllegalStateException("Agent run claim lost");

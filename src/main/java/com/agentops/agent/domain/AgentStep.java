@@ -33,10 +33,19 @@ public class AgentStep {
                      String inputSummary, String outputSummary, String modelName,
                      int inputTokens, int outputTokens, int retryCount, String errorCode,
                      Instant started, Instant finished) {
+        this(runId, type, sequence, status, inputSummary, outputSummary, modelName,
+                modelName == null ? null : "ticket-analysis-v1", inputTokens, outputTokens,
+                retryCount, errorCode, started, finished);
+    }
+
+    public AgentStep(UUID runId, AgentStepType type, int sequence, AgentStepStatus status,
+                     String inputSummary, String outputSummary, String modelName, String promptVersion,
+                     int inputTokens, int outputTokens, int retryCount, String errorCode,
+                     Instant started, Instant finished) {
         this.id = UUID.randomUUID(); this.runId = runId; this.stepType = type;
         this.sequenceNo = sequence; this.status = status;
         this.inputSnapshot = inputSummary; this.outputSnapshot = outputSummary;
-        this.modelName = modelName; this.promptVersion = modelName == null ? null : "ticket-analysis-v1";
+        this.modelName = modelName; this.promptVersion = promptVersion;
         this.inputTokens = inputTokens; this.outputTokens = outputTokens;
         this.retryCount = retryCount; this.errorCode = errorCode;
         this.errorMessage = errorCode; this.startedAt = started; this.finishedAt = finished;

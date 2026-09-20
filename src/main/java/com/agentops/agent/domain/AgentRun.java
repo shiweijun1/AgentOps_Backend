@@ -38,9 +38,14 @@ public class AgentRun {
 
     public static AgentRun pending(UUID ticketId, String tenantId, int revision, int attempt,
                                    UUID parentRunId, AgentTriggerType trigger, Instant now) {
+        return pending(ticketId, tenantId, AgentRunType.TICKET_ANALYSIS, revision, attempt, parentRunId, trigger, now);
+    }
+
+    public static AgentRun pending(UUID ticketId, String tenantId, AgentRunType type, int revision, int attempt,
+                                   UUID parentRunId, AgentTriggerType trigger, Instant now) {
         AgentRun run = new AgentRun();
         run.id = UUID.randomUUID(); run.ticketId = ticketId; run.tenantId = tenantId;
-        run.runType = AgentRunType.TICKET_ANALYSIS; run.inputRevision = revision;
+        run.runType = type; run.inputRevision = revision;
         run.attemptNo = attempt; run.parentRunId = parentRunId;
         run.executionCount = 0;
         run.status = AgentRunStatus.PENDING; run.triggerType = trigger;
@@ -50,9 +55,14 @@ public class AgentRun {
     }
 
     public void succeed(String owner, Instant now, String provider, String model, int inputTokens, int outputTokens) {
+        succeed(owner, now, provider, model, "ticket-analysis-v1", inputTokens, outputTokens);
+    }
+
+    public void succeed(String owner, Instant now, String provider, String model,
+                        String promptVersion, int inputTokens, int outputTokens) {
         requireOwner(owner, now);
         status = AgentRunStatus.SUCCEEDED; workerId = null; leaseUntil = null;
-        modelProvider = provider; modelName = model; promptVersion = "ticket-analysis-v1";
+        modelProvider = provider; modelName = model; this.promptVersion = promptVersion;
         this.inputTokens = inputTokens; this.outputTokens = outputTokens;
         errorCode = null; errorMessage = null; finishedAt = now; updatedAt = now;
     }

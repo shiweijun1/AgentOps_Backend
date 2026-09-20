@@ -111,7 +111,14 @@
 - 文章 `DRAFT → PUBLISHED → WITHDRAWN`；版本 `DRAFT → PUBLISHED → SUPERSEDED`。文章 `current_version_id` 指向唯一当前发布版本；已发布版本内容不原地修改。
 - 发布时以 `SELECT ... FOR UPDATE` 锁定文章，生成 `knowledge_chunk`、将旧版本标记为 SUPERSEDED、发布目标版本并切换 `current_version_id`，全部在同一事务。重复发布当前版本直接返回，不增加分块。
 - 全文搜索同时限定 article/version/chunk 的 `tenant_id`、文章与版本状态、`current_version_id`、`valid_from` 和排他的 `valid_until`；仅使用绑定参数，不拼接用户查询。
+- 有效期参数统一以 UTC `LocalDateTime` 绑定 MySQL `DATETIME(6)`，避免应用服务器本地时区导致未来有效期被误判为过期。
 - 按 Unicode 码点固定分块：窗口 500、重叠 50，最大 20,000 码点和 50 片。`chunk_index` 从 0 开始。`token_count` 是启发式估算：中日韩码点每个计 1，其他码点每 4 个计 1 并向上取整；不能视为模型真实 Token 用量。
+
+## AI 回复建议与引用（V7）
+
+`V7__reply_suggestion_review.sql` 扩展 V1 已预留的 `ai_suggestion` 和 `knowledge_citation`：建议新增 `edited_content`、`edited_by/at`、`rejected_by/at`、`rejection_reason`，引用新增 `tenant_id` 并回填既有记录。`ai_suggestion.run_id` 唯一，`agent_run(ticket_id,run_type,input_revision,attempt_no)` 唯一；建议 `version` 用 JPA 乐观锁加 API `expectedVersion` 防止并发编辑、采纳、拒绝。`original_content` 不更新；采纳时写 `final_content_snapshot`，不写 `ticket_message`。
+
+建议状态 `READY → EDITED → ADOPTED/REJECTED`，也允许 `READY → ADOPTED/REJECTED`；新建议会将旧 `READY/EDITED` 标记为 `SUPERSEDED`。检索候选引用持久化时记录租户、文章/版本/片段 ID、检索分数、顺序、内容快照和是否被模型引用。模型输出的引用必须是检索结果子集，并在正文中有相应标记；写入和采纳前都重新检查当前发布版本、文章状态及有效期。检索候选还必须覆盖工单标题至少 80% 的非空白双字组合，避免仅凭通用词命中生成建议。V7 注册 `suggestion:read` 和 `suggestion:review`，开发 ADMIN/SUPPORT 获授权。无可靠检索或校验失败不产生建议，回复 Run 失败并等待人工处理。
 
 可靠性边界：
 

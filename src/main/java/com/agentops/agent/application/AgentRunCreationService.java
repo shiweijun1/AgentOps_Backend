@@ -39,4 +39,19 @@ public class AgentRunCreationService {
         return runs.saveAndFlush(AgentRun.pending(ticketId, tenantId, snapshot.inputRevision(),
                 previous + 1, parent, AgentTriggerType.MANUAL, clock.instant()));
     }
+
+    @Transactional
+    public AgentRun fromSuccessfulAnalysis(AgentRun analysis) {
+        if (analysis.getRunType() != AgentRunType.TICKET_ANALYSIS
+                || analysis.getStatus() != AgentRunStatus.SUCCEEDED) {
+            throw new IllegalArgumentException("Reply run requires a successful analysis");
+        }
+        return runs.findByTicketIdAndRunTypeAndInputRevisionAndAttemptNo(
+                analysis.getTicketId(), AgentRunType.REPLY_SUGGESTION,
+                analysis.getInputRevision(), analysis.getAttemptNo())
+                .orElseGet(() -> runs.saveAndFlush(AgentRun.pending(
+                        analysis.getTicketId(), analysis.getTenantId(), AgentRunType.REPLY_SUGGESTION,
+                        analysis.getInputRevision(), analysis.getAttemptNo(), analysis.getId(),
+                        AgentTriggerType.ANALYSIS_SUCCEEDED, clock.instant())));
+    }
 }

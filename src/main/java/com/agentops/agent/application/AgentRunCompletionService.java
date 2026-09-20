@@ -14,10 +14,13 @@ public class AgentRunCompletionService {
     private final AgentStepRepository steps;
     private final AiAnalysisResultRepository results;
     private final Clock clock;
+    private final AgentRunCreationService creation;
 
     public AgentRunCompletionService(AgentRunRepository runs, AgentStepRepository steps,
-                                     AiAnalysisResultRepository results, Clock clock) {
+                                     AiAnalysisResultRepository results, Clock clock,
+                                     AgentRunCreationService creation) {
         this.runs = runs; this.steps = steps; this.results = results; this.clock = clock;
+        this.creation = creation;
     }
 
     @Transactional
@@ -32,6 +35,7 @@ public class AgentRunCompletionService {
                 output.manualReason(), output.reason(), clock.instant()));
         run.succeed(claim.owner(), clock.instant(), model.provider(), response.modelName(),
                 response.inputTokens(), response.outputTokens());
+        creation.fromSuccessfulAnalysis(run);
     }
 
     @Transactional

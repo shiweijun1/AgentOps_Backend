@@ -38,7 +38,8 @@ public class MysqlKnowledgeSearch {
     public List<KnowledgeSearchHit> search(String tenantId, String keyword, Instant now, int limit) {
         var parameters = new MapSqlParameterSource()
                 .addValue("tenantId", tenantId).addValue("keyword", keyword)
-                .addValue("now", java.sql.Timestamp.from(now)).addValue("limit", limit);
+                .addValue("now", java.time.LocalDateTime.ofInstant(now, java.time.ZoneOffset.UTC))
+                .addValue("limit", limit);
         return jdbc.query(SQL, parameters, (rs, row) -> new KnowledgeSearchHit(
                 uuid(rs.getBytes("article_id")), uuid(rs.getBytes("version_id")),
                 uuid(rs.getBytes("chunk_id")), rs.getString("title"),
