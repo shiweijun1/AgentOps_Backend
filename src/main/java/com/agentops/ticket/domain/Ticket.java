@@ -166,6 +166,11 @@ public class Ticket extends BaseAuditableEntity {
         return previous;
     }
 
+    /** Recording a public staff reply is independent of the ticket workflow state machine. */
+    public void recordFirstResponse(Instant occurredAt) {
+        if (firstResponseAt == null) firstResponseAt = occurredAt;
+    }
+
     public UUID getId() { return id; }
     public String getTenantId() { return tenantId; }
     public String getTicketNo() { return ticketNo; }

@@ -136,7 +136,10 @@ Content-Type: {{json}}
 
 {"title":"企业账号登录","description":"企业账号登录失败，请协助排查双重认证。","priority":"MEDIUM"}
 
-> {% client.global.set("replyTicketId", response.body.data.id); %}
+> {%
+    client.global.set("replyTicketId", response.body.data.id);
+    client.global.set("replyTicketVersion", response.body.data.version);
+%}
 
 ### 17. 查询回复任务与建议；异步 Worker 完成前可能返回空列表
 GET {{baseUrl}}/api/v1/tickets/{{replyTicketId}}/agent-runs
@@ -174,6 +177,57 @@ Content-Type: {{json}}
 ### 如需拒绝而非采纳，使用 POST /api/v1/suggestions/{{suggestionId}}/reject
 ### 请求体：{"expectedVersion": 0, "reason": "需人工核查"}
 
-### 21. 撤回知识文章；再次检索不再命中，未采纳的建议也不能再采纳
+### 21. 分派演示工单给客服
+POST {{baseUrl}}/api/v1/tickets/{{replyTicketId}}/assignments
+Authorization: Bearer {{adminToken}}
+Content-Type: {{json}}
+
+{"teamId":"{{supportTeamId}}","assigneeId":"{{supportUserId}}","reason":"客服会话演示","expectedVersion":{{replyTicketVersion}}}
+
+### 22. 客服登录
+POST {{baseUrl}}/api/v1/auth/login
+Content-Type: {{json}}
+
+{"tenantId":"default","username":"support","password":"Admin@123456"}
+
+> {% client.global.set("supportToken", response.body.data.accessToken); %}
+
+### 23. 显式发送已采纳建议；重复同一 clientRequestId 返回同一消息
+POST {{baseUrl}}/api/v1/tickets/{{replyTicketId}}/suggestions/{{suggestionId}}/send
+Authorization: Bearer {{supportToken}}
+Content-Type: {{json}}
+
+{"clientRequestId":"demo-suggestion-send-001"}
+
+### 24. 客服添加仅内部可见的备注
+POST {{baseUrl}}/api/v1/tickets/{{replyTicketId}}/messages
+Authorization: Bearer {{supportToken}}
+Content-Type: {{json}}
+
+{"intent":"INTERNAL_NOTE","content":"已核查账号状态，需要继续观察。","clientRequestId":"demo-internal-note-001"}
+
+### 25. 客服手写公开回复
+POST {{baseUrl}}/api/v1/tickets/{{replyTicketId}}/messages
+Authorization: Bearer {{supportToken}}
+Content-Type: {{json}}
+
+{"intent":"PUBLIC_REPLY","content":"如仍有问题，请提供报错时间。","clientRequestId":"demo-support-reply-001"}
+
+### 26. 客户回复
+POST {{baseUrl}}/api/v1/tickets/{{replyTicketId}}/messages
+Authorization: Bearer {{customerToken}}
+Content-Type: {{json}}
+
+{"intent":"PUBLIC_REPLY","content":"已按建议检查，稍后反馈。","clientRequestId":"demo-customer-reply-001"}
+
+### 27. 客户查看公开会话，不会看到内部备注
+GET {{baseUrl}}/api/v1/tickets/{{replyTicketId}}/messages
+Authorization: Bearer {{customerToken}}
+
+### 28. 客服查看完整会话，含内部备注
+GET {{baseUrl}}/api/v1/tickets/{{replyTicketId}}/messages
+Authorization: Bearer {{supportToken}}
+
+### 29. 撤回知识文章；再次检索不再命中，未采纳的建议也不能再采纳
 POST {{baseUrl}}/api/v1/knowledge/articles/{{knowledgeArticleId}}/withdraw
 Authorization: Bearer {{adminToken}}

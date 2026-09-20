@@ -120,6 +120,12 @@
 
 建议状态 `READY → EDITED → ADOPTED/REJECTED`，也允许 `READY → ADOPTED/REJECTED`；新建议会将旧 `READY/EDITED` 标记为 `SUPERSEDED`。检索候选引用持久化时记录租户、文章/版本/片段 ID、检索分数、顺序、内容快照和是否被模型引用。模型输出的引用必须是检索结果子集，并在正文中有相应标记；写入和采纳前都重新检查当前发布版本、文章状态及有效期。检索候选还必须覆盖工单标题至少 80% 的非空白双字组合，避免仅凭通用词命中生成建议。V7 注册 `suggestion:read` 和 `suggestion:review`，开发 ADMIN/SUPPORT 获授权。无可靠检索或校验失败不产生建议，回复 Run 失败并等待人工处理。
 
+## 工单会话（V8）
+
+V1 的 `ticket_message` 已有 `(tenant_id, ticket_id, client_request_id)` 唯一键、`source_suggestion_id` 与按工单时间查询索引；`ticket.first_response_at` 和 `ai_suggestion.source_message_id` 也已预留。V8 只增加可空 `source_suggestion_id` 的唯一键，以数据库约束保证每条 AI 建议至多对应一条消息，并注册消息读取、公开回复、内部备注和人工发送建议的权限。开发 CUSTOMER 获读取和公开回复权限，ADMIN/SUPPORT 获全部四项权限。V1～V7 不修改。
+
+`CUSTOMER_REPLY`、`SUPPORT_REPLY` 和 `AI_SUGGESTION` 对客户可见，`INTERNAL_NOTE` 不可见。消息不可原地修改；客户读取使用 `tenant_id`、`ticket_id` 和 `visible_to_requester=true` 条件，客服读取仍需团队/负责人或管理员数据权限。写入先按租户锁工单，再比较请求 ID 对应的发送语义；同键异义为 409。同一事务写消息、关联已采纳建议并首次设置 `first_response_at`。普通消息的 `source_suggestion_id` 为 NULL，可重复出现；AI 建议发送时正文从已采纳的最终快照读取，不接受客户端指定发送人、可见性或正文。消息不改变工单状态，关闭工单需先重新打开才能继续写入。
+
 可靠性边界：
 
 - 工单与 PENDING Outbox 在同一 MySQL 事务提交。

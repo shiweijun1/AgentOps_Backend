@@ -69,6 +69,12 @@ public class AiSuggestion {
         supersededBy = newSuggestionId; status = AiSuggestionStatus.SUPERSEDED;
     }
 
+    public void markSent(UUID messageId) {
+        if (status != AiSuggestionStatus.ADOPTED) throw new IllegalStateException("Suggestion is not adopted");
+        if (sourceMessageId != null) throw new IllegalStateException("Suggestion has already been sent");
+        sourceMessageId = messageId;
+    }
+
     private void requireReviewable() {
         if (status != AiSuggestionStatus.READY && status != AiSuggestionStatus.EDITED)
             throw new IllegalStateException("Suggestion is no longer reviewable");
@@ -93,6 +99,7 @@ public class AiSuggestion {
     public Instant getRejectedAt() { return rejectedAt; }
     public String getRejectionReason() { return rejectionReason; }
     public String getFinalContentSnapshot() { return finalContentSnapshot; }
+    public UUID getSourceMessageId() { return sourceMessageId; }
     public long getVersion() { return version; }
     public Instant getCreatedAt() { return createdAt; }
 }

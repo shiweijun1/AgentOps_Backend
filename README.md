@@ -1,6 +1,6 @@
 # AgentOps Backend
 
-AgentOps 是一个企业智能工单处理平台。本仓库提供 Java 21、Spring Boot 3 的模块化单体后端，以及身份认证、RBAC、工单领域、Transactional Outbox、工单智能分析 Agent、知识库文本检索和带引用的 AI 回复建议最小闭环。建议仅供客服人工审核，不自动发送客户消息。
+AgentOps 是一个企业智能工单处理平台。本仓库提供 Java 21、Spring Boot 3 的模块化单体后端，以及身份认证、RBAC、工单、可靠消息、智能分析、知识检索、AI 回复建议和人工会话闭环。采纳建议不会自动发送；客服必须显式调用发送接口，消息只保存在平台内。
 
 ## 技术栈
 
@@ -21,7 +21,8 @@ AgentOps 是一个企业智能工单处理平台。本仓库提供 Java 21、Spr
 com.agentops
 ├── bootstrap       启动与 OpenAPI 配置
 ├── identity        身份认证、RBAC、团队
-├── ticket          工单、分派、会话
+├── ticket          工单、分派与状态机
+├── conversation    工单公开会话与内部备注
 ├── agent           Agent Run、Step、分析和建议
 ├── knowledge       知识内容与检索
 ├── analytics       指标读模型
@@ -314,6 +315,20 @@ V6 为 `knowledge_chunk.content` 建立 MySQL `ngram` FULLTEXT 索引；默认 M
 
 V7 增加人工编辑/拒绝快照列、引用租户列及权限，不修改 V1～V6。默认 fake 模型可本地演示；HTTP 模型沿用 `AI_PROVIDER=http` 与现有模型配置。MySQL ngram 分数是关键词相关性，不是事实正确性证明；客服采纳前仍需人工核实内容。演示流程见 [HTTP Client 示例](docs/agentops-api.http)。
 
+## 工单会话与人工发送（V8）
+
+会话消息按 `createdAt, id` 升序返回。客户只看公开消息，客服和管理员在工单数据权限范围内还可看内部备注。消息类型为 `CUSTOMER_REPLY`、`SUPPORT_REPLY`、`INTERNAL_NOTE`、`AI_SUGGESTION`；请求只能选择 `PUBLIC_REPLY` 或 `INTERNAL_NOTE`，发送人、可见性和来源均由服务端依据 JWT 登录用户确定。
+
+| 方法 | 地址 | 权限 |
+|---|---|---|
+| `GET` | `/api/v1/tickets/{id}/messages` | `ticket:message:read` + 工单可见范围 |
+| `POST` | `/api/v1/tickets/{id}/messages` | 公开回复 `ticket:message:reply`；内部备注 `ticket:message:note` |
+| `POST` | `/api/v1/tickets/{id}/suggestions/{suggestionId}/send` | `ticket:suggestion:send` + 客服/管理员 + 工单可见范围 |
+
+每次写消息都必须携带 `clientRequestId`。同一租户、工单、请求 ID 和完全相同的发送语义返回同一条消息；同键不同内容、类型、发送人或来源返回 409。发送已采纳建议时，正文只能取 `finalContentSnapshot`，不能由客户端另传；同一建议只能发送一次。首次客服公开回复（包括建议发送）设置 `firstResponseAt`，后续消息不覆盖。`CLOSED` 工单拒绝新消息，须先按原状态机重新打开；消息操作本身不改变工单状态。发送只写 `ticket_message`，**不调用邮件、短信或其他外部通知渠道**。
+
+V1 已提供请求 ID 唯一键、建议来源字段与首次响应字段；V8 仅补充 `source_suggestion_id` 唯一键及权限，不修改 V1～V7。消息、建议的 `sourceMessageId` 和首次响应时间在同一个数据库事务提交，按工单行锁串行化并发写入。完整操作顺序见 [HTTP Client 演示](docs/agentops-api.http)。
+
 ## 数据库设计
 
-数据库说明见 `docs/database-design.md`，基线 DDL 见 `src/main/resources/db/migration/V1__baseline_schema.sql`；V2～V7 依次覆盖开发身份、工单、Outbox、Agent 分析、知识检索及回复建议。Hibernate 保持 `ddl-auto: validate`，所有数据库变更必须通过新的 Flyway 迁移完成。
+数据库说明见 `docs/database-design.md`，基线 DDL 见 `src/main/resources/db/migration/V1__baseline_schema.sql`；V2～V8 依次覆盖开发身份、工单、Outbox、Agent 分析、知识检索、回复建议及人工会话。Hibernate 保持 `ddl-auto: validate`，所有数据库变更必须通过新的 Flyway 迁移完成。
