@@ -1,6 +1,6 @@
-# AgentOps Backend
+# AgentOps
 
-AgentOps 是一个企业智能工单处理平台。本仓库提供 Java 21、Spring Boot 3 的模块化单体后端，以及身份认证、RBAC、工单、可靠消息、智能分析、知识检索、AI 回复建议和人工会话闭环。采纳建议不会自动发送；客服必须显式调用发送接口，消息只保存在平台内。
+AgentOps 是一个企业智能工单处理平台。本仓库提供 Java 21、Spring Boot 3 的模块化单体后端，以及 Vue 3 + TypeScript 的第一轮运营控制台。后端涵盖身份认证、RBAC、工单、可靠消息、智能分析、知识检索、AI 回复建议和人工会话闭环。采纳建议不会自动发送；客服必须显式调用发送接口，消息只保存在平台内。
 
 ## 技术栈
 
@@ -14,6 +14,7 @@ AgentOps 是一个企业智能工单处理平台。本仓库提供 Java 21、Spr
 - Flyway
 - springdoc-openapi
 - JUnit 5 + Testcontainers
+- Vue 3 + TypeScript + Vite + Vue Router（`frontend/`）
 
 ## 模块边界
 
@@ -129,6 +130,29 @@ $login = Invoke-RestMethod `
 $headers = @{ Authorization = "Bearer $($login.data.accessToken)" }
 Invoke-RestMethod -Uri 'http://localhost:8080/api/v1/auth/me' -Headers $headers
 Invoke-RestMethod -Uri 'http://localhost:8080/api/v1/admin/security-check' -Headers $headers
+```
+
+### 7. 启动前端工作台
+
+保持后端运行，在另一个终端执行（建议 Node.js 20.19+）：
+
+```powershell
+cd frontend
+npm ci
+npm run dev
+```
+
+浏览器打开 `http://localhost:5173`。Vite 将浏览器的 `/api` 请求代理到 `http://localhost:8080`，无需在浏览器保存后端地址；先启动后端，否则登录和工单请求会显示连接错误。默认开发账号均属于 `default` 租户：管理员 `admin`、客服 `support`、客户 `customer`，密码均为本地种子密码 `Admin@123456`。账号仅用于本地演示。
+
+前端第一轮包括登录、工作台布局、工单分页/筛选、工单详情与处理记录。客户可创建工单；客服/管理员按后端权限查看、分派和流转可访问的工单；`CLOSED` 重新打开仅向管理员显示。所有工单内容来自后端 API，角色与权限来自 `/api/v1/auth/me`。Access Token 保存在当前浏览器标签页的 `sessionStorage`；401 会清除会话并引导重新登录。会话、Agent 分析、AI 建议和运营指标页面尚未接入前端，详情页只预留区域，不使用模拟数据。
+
+前端质量检查：
+
+```powershell
+cd frontend
+npm run typecheck
+npm run build
+npm test
 ```
 
 ## 身份认证接口
