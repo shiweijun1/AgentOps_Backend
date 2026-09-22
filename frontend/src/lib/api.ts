@@ -1,7 +1,8 @@
 import { accessToken, clearSession } from './session'
 import type {
-  CurrentUser, LoginResponse, Ticket, TicketAssignment, TicketPage, TicketPriority,
-  TicketStatus, TicketTransition,
+  AgentRun, AgentStep, AiSuggestion, CurrentUser, LoginResponse, MessageIntent, Ticket,
+  TicketAnalysis, TicketAssignment, TicketMessage, TicketPage, TicketPriority, TicketStatus,
+  TicketTransition,
 } from '../types'
 
 interface ApiEnvelope<T> {
@@ -94,5 +95,42 @@ export const ticketApi = {
   assign: (id: string, expectedVersion: number, teamId: string | null, assigneeId: string | null, reason: string) =>
     request<Ticket>(`/tickets/${encodeURIComponent(id)}/assignments`, {
       method: 'POST', body: { expectedVersion, teamId, assigneeId, reason },
+    }),
+}
+
+export const conversationApi = {
+  list: (ticketId: string) => request<TicketMessage[]>(`/tickets/${encodeURIComponent(ticketId)}/messages`),
+  post: (ticketId: string, intent: MessageIntent, content: string, clientRequestId: string) =>
+    request<TicketMessage>(`/tickets/${encodeURIComponent(ticketId)}/messages`, {
+      method: 'POST', body: { intent, content, clientRequestId },
+    }),
+  sendSuggestion: (ticketId: string, suggestionId: string, clientRequestId: string) =>
+    request<TicketMessage>(`/tickets/${encodeURIComponent(ticketId)}/suggestions/${encodeURIComponent(suggestionId)}/send`, {
+      method: 'POST', body: { clientRequestId },
+    }),
+}
+
+export const agentApi = {
+  runs: (ticketId: string) => request<AgentRun[]>(`/tickets/${encodeURIComponent(ticketId)}/agent-runs`),
+  run: (runId: string) => request<AgentRun>(`/agent-runs/${encodeURIComponent(runId)}`),
+  steps: (runId: string) => request<AgentStep[]>(`/agent-runs/${encodeURIComponent(runId)}/steps`),
+  analysis: (ticketId: string) => request<TicketAnalysis | null>(`/tickets/${encodeURIComponent(ticketId)}/analysis`),
+  rerun: (ticketId: string) => request<AgentRun>(`/tickets/${encodeURIComponent(ticketId)}/agent-runs`, { method: 'POST' }),
+}
+
+export const suggestionApi = {
+  list: (ticketId: string) => request<AiSuggestion[]>(`/tickets/${encodeURIComponent(ticketId)}/suggestions`),
+  get: (id: string) => request<AiSuggestion>(`/suggestions/${encodeURIComponent(id)}`),
+  edit: (id: string, expectedVersion: number, content: string) =>
+    request<AiSuggestion>(`/suggestions/${encodeURIComponent(id)}`, {
+      method: 'PATCH', body: { expectedVersion, content },
+    }),
+  adopt: (id: string, expectedVersion: number) =>
+    request<AiSuggestion>(`/suggestions/${encodeURIComponent(id)}/adopt`, {
+      method: 'POST', body: { expectedVersion },
+    }),
+  reject: (id: string, expectedVersion: number, reason: string) =>
+    request<AiSuggestion>(`/suggestions/${encodeURIComponent(id)}/reject`, {
+      method: 'POST', body: { expectedVersion, reason },
     }),
 }

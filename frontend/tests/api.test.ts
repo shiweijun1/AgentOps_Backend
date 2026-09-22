@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { ApiError, request, ticketApi } from '../src/lib/api'
+import { ApiError, conversationApi, request, suggestionApi, ticketApi } from '../src/lib/api'
 import { accessToken, clearSession, saveToken } from '../src/lib/session'
 
 const success = <T>(data: T) => new Response(JSON.stringify({ success: true, code: 'OK', message: 'success', data }),
@@ -65,5 +65,23 @@ describe('统一 API 请求', () => {
     expect(fetchMock.mock.calls[0][0]).toContain('status=PENDING')
     expect(fetchMock.mock.calls[0][0]).toContain('keyword=%E8%B4%A6%E6%88%B7+%E7%99%BB%E5%BD%95')
     expect(fetchMock.mock.calls[0][0]).toContain('page=1')
+  })
+
+  it('会话发送完整传递 intent 与 clientRequestId', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(success({ id: 'message-1' }))
+    vi.stubGlobal('fetch', fetchMock)
+    await conversationApi.post('ticket-1', 'INTERNAL_NOTE', '仅内部可见', 'request-1')
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/v1/tickets/ticket-1/messages')
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+      intent: 'INTERNAL_NOTE', content: '仅内部可见', clientRequestId: 'request-1',
+    })
+  })
+
+  it('建议审核传递 expectedVersion', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(success({ id: 'suggestion-1' }))
+    vi.stubGlobal('fetch', fetchMock)
+    await suggestionApi.adopt('suggestion-1', 7)
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/v1/suggestions/suggestion-1/adopt')
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ expectedVersion: 7 })
   })
 })

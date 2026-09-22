@@ -3,6 +3,9 @@ import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import StatePanel from '../components/StatePanel.vue'
 import StatusPill from '../components/StatusPill.vue'
+import TicketConversationPanel from '../components/TicketConversationPanel.vue'
+import AgentAnalysisPanel from '../components/AgentAnalysisPanel.vue'
+import AiSuggestionPanel from '../components/AiSuggestionPanel.vue'
 import { ApiError, ticketApi } from '../lib/api'
 import { formatDate, priorityMeta, statusMeta, statusTransitions } from '../lib/presentation'
 import { currentUser, hasPermission, primaryRole } from '../lib/session'
@@ -26,6 +29,9 @@ const availableTransitions = computed(() => {
     ? [] : next
 })
 const canAssign = computed(() => hasPermission('ticket:assign') && primaryRole.value !== 'CUSTOMER')
+const canReadConversation = computed(() => hasPermission('ticket:message:read'))
+const canReadAgent = computed(() => primaryRole.value !== 'CUSTOMER' && hasPermission('agent:read'))
+const canReadSuggestions = computed(() => primaryRole.value !== 'CUSTOMER' && hasPermission('suggestion:read'))
 const selectedStatus = ref<TicketStatus | ''>('')
 const transitionReason = ref('')
 const actionError = ref('')
@@ -139,13 +145,15 @@ async function assign() {
 
       <div class="detail-grid">
         <div class="detail-primary">
-          <nav class="section-tabs" aria-label="工单详情区域"><button type="button" :class="{ active: activeSection === 'summary' }" @click="activeSection = 'summary'">概览与记录</button><button type="button" :class="{ active: activeSection === 'conversation' }" @click="activeSection = 'conversation'">会话 <span>后续</span></button><button type="button" :class="{ active: activeSection === 'agent' }" @click="activeSection = 'agent'">Agent 分析 <span>后续</span></button><button type="button" :class="{ active: activeSection === 'suggestions' }" @click="activeSection = 'suggestions'">回复建议 <span>后续</span></button></nav>
+          <nav class="section-tabs" aria-label="工单详情区域"><button type="button" :class="{ active: activeSection === 'summary' }" @click="activeSection = 'summary'">概览与记录</button><button v-if="canReadConversation" type="button" :class="{ active: activeSection === 'conversation' }" @click="activeSection = 'conversation'">会话</button><button v-if="canReadAgent" type="button" :class="{ active: activeSection === 'agent' }" @click="activeSection = 'agent'">Agent 分析</button><button v-if="canReadSuggestions" type="button" :class="{ active: activeSection === 'suggestions' }" @click="activeSection = 'suggestions'">回复建议</button></nav>
           <template v-if="activeSection === 'summary'">
             <section class="detail-card description-card"><div class="card-heading"><span class="section-kicker">REQUEST / 01</span><h2>问题描述</h2></div><p class="description-text">{{ ticket.description }}</p></section>
             <section class="detail-card history-card"><div class="card-heading"><span class="section-kicker">ACTIVITY / 02</span><h2>状态流转</h2></div><div v-if="historyError" class="inline-alert" role="alert">{{ historyError }}</div><div v-if="transitions.length === 0" class="subtle-empty">暂无流转记录。</div><ol v-else class="timeline"><li v-for="item in [...transitions].reverse()" :key="item.id"><span class="timeline-node" /><div><div class="timeline-title"><strong>{{ item.fromStatus ? statusMeta[item.fromStatus].label : '创建工单' }} → {{ statusMeta[item.toStatus].label }}</strong><time>{{ formatDate(item.occurredAt) }}</time></div><p v-if="item.reason">{{ item.reason }}</p><small>操作类型 · {{ item.actorType }}</small></div></li></ol></section>
             <section class="detail-card assignment-card"><div class="card-heading"><span class="section-kicker">OWNERSHIP / 03</span><h2>分派记录</h2></div><div v-if="assignments.length === 0" class="subtle-empty">尚未产生分派记录。</div><ol v-else class="compact-list"><li v-for="item in [...assignments].reverse()" :key="item.id"><span class="compact-mark" /><div><strong>{{ item.assignmentType === 'INITIAL' ? '首次分派' : '重新分派' }}</strong><p>{{ item.reason }}</p><small>{{ formatDate(item.occurredAt) }}</small></div></li></ol></section>
           </template>
-          <section v-else class="detail-card planned-panel"><div class="planned-icon">↗</div><span class="section-kicker">NEXT PHASE / 预留区域</span><h2>{{ activeSection === 'conversation' ? '工单会话' : activeSection === 'agent' ? 'Agent 执行轨迹' : 'AI 回复建议' }}</h2><p>{{ activeSection === 'conversation' ? '这里将接入客户消息、客服回复与内部备注。当前版本暂未接入会话 API。' : activeSection === 'agent' ? '这里将展示分析结果、执行步骤与异常轨迹。当前版本暂未接入 Agent API。' : '这里将接入建议正文、知识引用与人工审核。当前版本暂未接入建议 API。' }}</p><span class="planned-footnote">此区域不展示模拟数据</span></section>
+          <TicketConversationPanel v-else-if="activeSection === 'conversation' && canReadConversation" :ticket="ticket" @ticket-updated="loadTicket" />
+          <AgentAnalysisPanel v-else-if="activeSection === 'agent' && canReadAgent" :ticket-id="ticket.id" />
+          <AiSuggestionPanel v-else-if="activeSection === 'suggestions' && canReadSuggestions" :ticket-id="ticket.id" :closed="ticket.status === 'CLOSED'" @ticket-updated="loadTicket" />
         </div>
 
         <aside class="detail-aside">
