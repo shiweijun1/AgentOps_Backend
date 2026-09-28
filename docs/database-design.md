@@ -106,13 +106,15 @@
 
 ## 知识库文本检索（V6）
 
-`V6__knowledge_text_search.sql` 为 `knowledge_chunk.content` 增加 `WITH PARSER ngram` 的 FULLTEXT 索引，并增加 `token_count_estimated` 标记；同时注册 `knowledge:manage`、`knowledge:search` 权限。开发 ADMIN 同时拥有管理和检索权限，SUPPORT 仅可检索。V1～V5 不作修改。
+`V1__baseline_schema.sql` 直接定义结构感知分块所需字段；`V6__knowledge_text_search.sql` 为 `knowledge_chunk.search_text` 增加 `WITH PARSER ngram` 的 FULLTEXT 索引，同时注册 `knowledge:manage`、`knowledge:search` 权限。开发 ADMIN 同时拥有管理和检索权限，SUPPORT 仅可检索。该迁移基线尚未发布，不兼容旧片段 ID 或历史引用。
 
 - 文章 `DRAFT → PUBLISHED → WITHDRAWN`；版本 `DRAFT → PUBLISHED → SUPERSEDED`。文章 `current_version_id` 指向唯一当前发布版本；已发布版本内容不原地修改。
 - 发布时以 `SELECT ... FOR UPDATE` 锁定文章，生成 `knowledge_chunk`、将旧版本标记为 SUPERSEDED、发布目标版本并切换 `current_version_id`，全部在同一事务。重复发布当前版本直接返回，不增加分块。
 - 全文搜索同时限定 article/version/chunk 的 `tenant_id`、文章与版本状态、`current_version_id`、`valid_from` 和排他的 `valid_until`；仅使用绑定参数，不拼接用户查询。
 - 有效期参数统一以 UTC `LocalDateTime` 绑定 MySQL `DATETIME(6)`，避免应用服务器本地时区导致未来有效期被误判为过期。
-- 按 Unicode 码点固定分块：窗口 500、重叠 50，最大 20,000 码点和 50 片。`chunk_index` 从 0 开始。`token_count` 是启发式估算：中日韩码点每个计 1，其他码点每 4 个计 1 并向上取整；不能视为模型真实 Token 用量。
+- 只使用 `SEMANTIC_BOUNDARY_V2`，递归边界优先级为章节 → 段落 → 句子 → 标点 → Unicode 安全硬切；无固定窗口和重叠。目标片段约 400 个估算 Token，硬上限 600；单篇最大 20,000 码点、80 片，`chunk_index` 从 0 开始。
+- `content` 是不含标题标记的干净引用正文；`search_text` 是文章标题、`section_path` 和正文的组合，只用于全文检索。`start_offset` 为包含、`end_offset` 为排除，均是相对版本正文的 Unicode 码点偏移。`chunk_hash` 对策略、路径、偏移和正文计算 SHA-256。
+- `token_count` 是启发式估算：中日韩码点每个计 1，其他码点每 4 个计 1 并向上取整；`token_count_estimated=true`，不能视为模型真实 Token 用量。
 
 ## AI 回复建议与引用（V7）
 

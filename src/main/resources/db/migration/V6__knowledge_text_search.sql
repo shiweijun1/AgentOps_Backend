@@ -1,6 +1,5 @@
 ALTER TABLE knowledge_chunk
-    ADD COLUMN token_count_estimated BOOLEAN NOT NULL DEFAULT TRUE AFTER token_count,
-    ADD FULLTEXT KEY ft_knowledge_chunk_content (content) WITH PARSER ngram;
+    ADD FULLTEXT KEY ft_knowledge_chunk_search_text (search_text) WITH PARSER ngram;
 
 INSERT INTO iam_permission (id, code, name, description) VALUES
     (UUID_TO_BIN('00000000-0000-0000-0000-000000000131'), 'knowledge:manage', '管理知识库', '创建文章和版本、发布与撤回'),

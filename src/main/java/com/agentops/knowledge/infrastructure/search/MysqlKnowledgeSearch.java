@@ -14,7 +14,7 @@ public class MysqlKnowledgeSearch {
     private static final String SQL = """
             SELECT a.id AS article_id, v.id AS version_id, c.id AS chunk_id,
                    a.title, c.content AS snippet,
-                   MATCH(c.content) AGAINST (:keyword IN NATURAL LANGUAGE MODE) AS score
+                   MATCH(c.search_text) AGAINST (:keyword IN NATURAL LANGUAGE MODE) AS score
               FROM knowledge_chunk c
               JOIN knowledge_version v ON v.id = c.knowledge_version_id
               JOIN knowledge_article a ON a.id = v.article_id
@@ -27,7 +27,7 @@ public class MysqlKnowledgeSearch {
                AND a.current_version_id = v.id
                AND (a.valid_from IS NULL OR a.valid_from <= :now)
                AND (a.valid_until IS NULL OR a.valid_until > :now)
-               AND MATCH(c.content) AGAINST (:keyword IN NATURAL LANGUAGE MODE) > 0
+               AND MATCH(c.search_text) AGAINST (:keyword IN NATURAL LANGUAGE MODE) > 0
              ORDER BY score DESC, a.id, c.chunk_index
              LIMIT :limit
             """;

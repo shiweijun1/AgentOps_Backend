@@ -27,7 +27,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
         "spring.flyway.placeholders.dev_admin_password_hash=$2a$12$4RjCpvCT7V6ZKG/cEWsbq.UB.s/hHLNDypgrN3CjCd1sQ.yZl1o2S",
         "spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration,org.springframework.boot.autoconfigure.amqp.RabbitAutoConfiguration",
         "agentops.messaging.enabled=false",
-        "agentops.agent.worker-enabled=false"
+        "agentops.agent.worker-enabled=false",
+        "agentops.ai.provider=fake"
 })
 class KnowledgeIntegrationTest {
     @Container static final MySQLContainer MYSQL = new MySQLContainer(DockerImageName.parse("mysql:8.4"))
@@ -48,7 +49,7 @@ class KnowledgeIntegrationTest {
     @Test void chineseSearchFindsPublishedCurrentChunkWithSources() {
         var article = service.createArticle("tenant-a", "星河账号指南", null, null);
         var version = service.createVersion(article.getId(), "tenant-a",
-                "星河账号登录失败时，请检查账号状态与双重认证。", "reviewer");
+                "# 认证故障\n\n账号登录失败时，请检查账号状态与双重认证。", "reviewer");
         service.publish(article.getId(), version.getId(), "tenant-a", "reviewer");
 
         var hits = service.search("tenant-a", "星河", 10);
@@ -57,10 +58,15 @@ class KnowledgeIntegrationTest {
         assertThat(hits.getFirst().versionId()).isEqualTo(version.getId());
         assertThat(hits.getFirst().chunkId()).isNotNull();
         assertThat(hits.getFirst().title()).isEqualTo("星河账号指南");
-        assertThat(hits.getFirst().snippet()).contains("星河");
+        assertThat(hits.getFirst().snippet()).doesNotContain("星河").contains("账号登录失败");
         assertThat(hits.getFirst().score()).isPositive();
-        assertThat(chunks.findByTenantIdAndVersionIdOrderByChunkIndex("tenant-a", version.getId())
-                .getFirst().isTokenCountEstimated()).isTrue();
+        var stored = chunks.findByTenantIdAndVersionIdOrderByChunkIndex("tenant-a", version.getId()).getFirst();
+        assertThat(stored.isTokenCountEstimated()).isTrue();
+        assertThat(stored.getSectionPath()).isEqualTo("认证故障");
+        assertThat(stored.getSearchText()).contains("星河账号指南", "认证故障", stored.getContent());
+        assertThat(stored.getChunkingStrategy()).isEqualTo(KnowledgeChunkingStrategy.SEMANTIC_BOUNDARY_V2);
+        assertThat(stored.getChunkHash()).hasSize(64);
+        assertThat(stored.getEndOffset()).isGreaterThan(stored.getStartOffset());
     }
 
     @Test void newVersionSupersedesOldAndRepeatedPublishDoesNotDuplicateChunks() {

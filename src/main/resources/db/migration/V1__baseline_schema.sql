@@ -255,14 +255,22 @@ CREATE TABLE knowledge_chunk (
     knowledge_version_id BINARY(16) NOT NULL,
     chunk_index INT NOT NULL,
     content TEXT NOT NULL,
+    search_text TEXT NOT NULL,
+    section_path VARCHAR(1000) NOT NULL,
+    start_offset INT NOT NULL,
+    end_offset INT NOT NULL,
+    chunking_strategy VARCHAR(32) NOT NULL,
+    chunk_hash CHAR(64) NOT NULL,
     token_count INT NOT NULL,
-    embedding_ref VARCHAR(255) NULL,
+    token_count_estimated BOOLEAN NOT NULL DEFAULT TRUE,
     index_status VARCHAR(32) NOT NULL,
     created_at DATETIME(6) NOT NULL,
     PRIMARY KEY (id),
     UNIQUE KEY uk_knowledge_chunk_index (knowledge_version_id, chunk_index),
     CONSTRAINT fk_chunk_version FOREIGN KEY (knowledge_version_id) REFERENCES knowledge_version (id),
     CONSTRAINT chk_chunk_index CHECK (chunk_index >= 0),
+    CONSTRAINT chk_chunk_offsets CHECK (start_offset >= 0 AND end_offset > start_offset),
+    CONSTRAINT chk_chunk_strategy CHECK (chunking_strategy = 'SEMANTIC_BOUNDARY_V2'),
     CONSTRAINT chk_chunk_token_count CHECK (token_count >= 0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 

@@ -47,7 +47,7 @@ public class KnowledgeApplicationService {
         if (article.getStatus() == KnowledgeArticleStatus.WITHDRAWN)
             throw new BusinessException(ErrorCode.CONFLICT, "已撤回文章不能新增版本");
         final String normalized = content == null ? "" : content.strip();
-        try { chunker.split(normalized); }
+        try { chunker.split(article.getTitle(), normalized); }
         catch (IllegalArgumentException exception) { throw new BusinessException(ErrorCode.INVALID_REQUEST, exception.getMessage()); }
         int next = versions.maxVersionNo(tenantId, articleId) + 1;
         return versions.saveAndFlush(KnowledgeVersion.draft(tenantId, articleId, next,
@@ -67,11 +67,13 @@ public class KnowledgeApplicationService {
             throw new BusinessException(ErrorCode.CONFLICT, "文章或版本状态不允许发布");
 
         List<KnowledgeChunker.Part> parts;
-        try { parts = chunker.split(target.getContent()); }
+        try { parts = chunker.split(article.getTitle(), target.getContent()); }
         catch (IllegalArgumentException exception) { throw new BusinessException(ErrorCode.INVALID_REQUEST, exception.getMessage()); }
         Instant now = clock.instant();
         chunks.saveAllAndFlush(parts.stream().map(part -> new KnowledgeChunk(
-                tenantId, versionId, part.index(), part.content(), part.estimatedTokenCount(), now)).toList());
+                tenantId, versionId, part.index(), part.content(), part.searchText(), part.sectionPath(),
+                part.startOffset(), part.endOffset(), part.strategy(), part.chunkHash(),
+                part.estimatedTokenCount(), now)).toList());
         if (article.getCurrentVersionId() != null) {
             KnowledgeVersion previous = versions.findByIdAndTenantIdAndArticleId(
                     article.getCurrentVersionId(), tenantId, articleId).orElseThrow();
